@@ -3,10 +3,15 @@
 namespace Tests\Feature;
 
 use App\Models\Category;
+use App\Models\Product;
 use App\Models\Scopes\IsActiveScope;
 use Database\Seeders\CategorySeeder;
+use Database\Seeders\CustomerSeeder;
+use Database\Seeders\ProductSeeder;
+use Database\Seeders\ReviewSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\WithFaker;
+use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
 
 class CategoryTest extends TestCase {
@@ -170,18 +175,6 @@ class CategoryTest extends TestCase {
         $category->is_active = false;
         $category->save();
 
-        $category = Category::find('FOOD');
-        $this->assertNull($category);
-    }
-
-    public function test_remove_global_scope() {
-        $category = new Category();
-        $category->id = 'FOOD';
-        $category->name = 'Food';
-        $category->description = 'Food Category';
-        $category->is_active = false;
-        $category->save();
-
         // select with global scope
         $category = Category::find('FOOD');
         $this->assertNull($category);
@@ -189,5 +182,88 @@ class CategoryTest extends TestCase {
         // select without global scope
         $category = Category::withoutGlobalScopes([IsActiveScope::class])->find('FOOD');
         $this->assertNotNull($category);
+    }
+
+    public function test_query_category() {
+        $this->seed(CategorySeeder::class);
+        $this->seed(ProductSeeder::class);
+
+        $category = Category::find('FOOD');
+        $this->assertNotNull($category);
+
+        $product = $category->products;
+        $this->assertNotNull($product);
+        $this->assertCount(1, $product);
+
+        Log::info(json_encode($category));
+    }
+
+    public function test_many_to_many_query() {
+        $category = new Category();
+        $category->id = '1';
+        $category->name = 'Category 1';
+        $category->description = 'Description 1';
+        $category->is_active = true;
+        $category->save();
+        $this->assertNotNull($category);
+
+        $products = [
+            new Product([
+                'id' => '1',
+                'name' => 'Product 1',
+                'description' => 'Description Product 1',
+                'price' => 1000,
+            ]),
+            new Product([
+                'id' => '2',
+                'name' => 'Product 2',
+                'description' => 'Description Product 2',
+                'price' => 2000,
+            ]),
+            new Product([
+                'id' => '3',
+                'name' => 'Product 3',
+                'description' => 'Description Product 3',
+                'price' => 3000,
+            ]),
+        ];
+
+        $category->products()->saveMany($products);
+        $this->assertNotNull($products);
+    }
+
+    public function test_has_one_of_many() {
+        $this->seed(CategorySeeder::class);
+        $this->seed(ProductSeeder::class);
+
+        $category = Category::find('FOOD');
+
+        $cheapestProduct = $category->cheapestProduct;
+        $this->assertNotNull($cheapestProduct);
+        $this->assertEquals('1', $cheapestProduct->id);
+        Log::info(json_encode($cheapestProduct));
+
+        $mostExpensiveProduct = $category->mostExpensiveProduct;
+        $this->assertNotNull($mostExpensiveProduct);
+        $this->assertEquals('2', $mostExpensiveProduct->id);
+        Log::info(json_encode($mostExpensiveProduct));
+    }
+
+    public function test_has_many_through() {
+        $this->seed([
+            CategorySeeder::class,
+            ProductSeeder::class,
+            CustomerSeeder::class,
+            ReviewSeeder::class,
+        ]);
+
+        $category = Category::find('FOOD');
+        $this->assertNotNull($category);
+
+        $reviews = $category->reviews;
+        $this->assertNotNull($reviews);
+        $this->assertCount(2, $reviews);
+
+        Log::info(json_encode($category));
     }
 }
